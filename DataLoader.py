@@ -37,7 +37,7 @@ class DataLoader:
 
         return df
 
-    def create_video_category_copy_pairs(self) -> dict[str, List[Tuple]]:
+    def create_video_category_copy_pairs(self):
         annotation_files = self.get_video_categories()
         video_category_copy_pairs = {}
 
