@@ -5,7 +5,6 @@ This module handles creation of dataframe for video copy sets from the annotatio
 import os
 import glob
 import random
-from typing import List, Tuple
 
 import cv2
 import numpy as np
@@ -126,6 +125,7 @@ class DataLoader:
             raise RuntimeError(f"Batch Size: {batch_size} can not be greater than number of video categories: {num_video_categories}")
 
         while True:
+            random.shuffle(video_category_folders)
             for i in range(0, num_video_categories, batch_size):
                 start = i
                 end = i + batch_size
