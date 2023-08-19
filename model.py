@@ -78,11 +78,17 @@ class TransformerCrossAttention(tf.keras.layers.Layer):
     def __init__(self, emb_dims: int, heads: int = 1):
         self.emb_dims = emb_dims
         self.heads = heads
+        self.pos_encoding = CustomSinePositionEncoding()
         self.multi_head_attn = tf.keras.layers.MultiHeadAttention(num_heads=heads, key_dim=emb_dims)
         super().__init__()
 
     def call(self, input_1: tf.Tensor, input_2: tf.Tensor):
-        cross_attn_enc, attn_weights = self.multi_head_attn(input_2, input_1, input_1, return_attention_scores=True)
+        position_encodings_1 = self.pos_encoding(input_1)
+        video_1_encoding_with_position = input_1 + position_encodings_1
+
+        position_encodings_2 = self.pos_encoding(input_2)
+        video_2_encoding_with_position = input_2 + position_encodings_2
+        cross_attn_enc, attn_weights = self.multi_head_attn(video_2_encoding_with_position, video_1_encoding_with_position, video_1_encoding_with_position, return_attention_scores=True)
         return cross_attn_enc, attn_weights
 
     def get_config(self):
@@ -106,17 +112,17 @@ def define_pair_video_encoder(pre_process_network: str, emb_size: int, cnn_train
     global_avg_pooling = tf.keras.layers.GlobalAveragePooling1D()
 
     cnn_vid_encoder = CNNVideoEncoder(pre_process_network, cnn_trainable=cnn_trainable)
-    transformer_self_attn = TransformerSelfAttention(emb_size)
+    # transformer_self_attn = TransformerSelfAttention(emb_size)
     transformer_cross_attn = TransformerCrossAttention(emb_size)
 
     frames1 = tf.keras.Input(shape=(None, frame_size, frame_size, 3), ragged=True)
     frames2 = tf.keras.Input(shape=(None, frame_size, frame_size, 3), ragged=True)
     vid_enc1 = cnn_vid_encoder(frames1)
     vid_enc2 = cnn_vid_encoder(frames2)
-    vid_self_attn_enc1 = transformer_self_attn(vid_enc1)
-    vid_self_attn_enc2 = transformer_self_attn(vid_enc2)
-    full_vid_enc2, full_vid_enc2_attn = transformer_cross_attn(vid_self_attn_enc1, vid_self_attn_enc2)
-    full_vid_enc1, full_vid_enc1_attn = transformer_cross_attn(vid_self_attn_enc2, vid_self_attn_enc1)
+    # vid_self_attn_enc1 = transformer_self_attn(vid_enc1)
+    # vid_self_attn_enc2 = transformer_self_attn(vid_enc2)
+    full_vid_enc2, full_vid_enc2_attn = transformer_cross_attn(vid_enc1, vid_enc2)
+    full_vid_enc1, full_vid_enc1_attn = transformer_cross_attn(vid_enc2, vid_enc1)
     full_vid_enc2_avg = global_avg_pooling(full_vid_enc2)
     full_vid_enc1_avg = global_avg_pooling(full_vid_enc1)
 
