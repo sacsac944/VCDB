@@ -98,7 +98,48 @@ class TransformerCrossAttention(tf.keras.layers.Layer):
         return layer_config
 
 
-def define_pair_video_encoder(pre_process_network: str, emb_size: int, cnn_trainable: bool=True):
+class CustomCrossAttention(tf.keras.layers.Layer):
+    def __init__(self, emb_dims: int, alpha: float = 0.0):
+        self.emb_dims = emb_dims
+        self.alpha = alpha
+        self.pos_encoding = CustomSinePositionEncoding()
+        self.W_VAL = tf.keras.layers.Dense(units=emb_dims, activation='relu')
+        self.W = tf.keras.layers.Dense(units=emb_dims, activation='relu')
+        super().__init__()
+
+    def call(self, input_1: tf.Tensor, input_2: tf.Tensor):
+        position_encodings_1 = self.pos_encoding(input_1)
+        video_1_encoding_with_position = input_1 + position_encodings_1
+        video_1_encoding_with_position = video_1_encoding_with_position.to_tensor(shape=video_1_encoding_with_position.bounding_shape())
+        video_1_encoding_with_position = self.W_VAL(video_1_encoding_with_position)
+        video_1_encoding_with_position_norm = tf.nn.l2_normalize(video_1_encoding_with_position, axis=-1)
+
+        position_encodings_2 = self.pos_encoding(input_2)
+        video_2_encoding_with_position = input_2 + position_encodings_2
+        video_2_encoding_with_position = video_2_encoding_with_position.to_tensor(
+            shape=video_2_encoding_with_position.bounding_shape())
+        video_2_encoding_with_position = self.W_VAL(video_2_encoding_with_position)
+        video_2_encoding_with_position_norm = tf.nn.l2_normalize(video_2_encoding_with_position, axis=-1)
+
+        video_1_attn_weights = tf.matmul(video_1_encoding_with_position_norm, tf.transpose(video_2_encoding_with_position_norm, perm=(0, 2, 1)))
+        video_1_attn_weights = tf.clip_by_value(video_1_attn_weights, clip_value_min=self.alpha, clip_value_max=1.0)
+        video_2_attn_weights = tf.transpose(video_1_attn_weights, perm=(0, 2, 1))
+
+        video_1_emb = tf.matmul(video_1_attn_weights, video_2_encoding_with_position)
+        video_2_emb = tf.matmul(video_2_attn_weights, video_1_encoding_with_position)
+
+        video_1_emb = self.W(video_1_emb)
+        video_2_emb = self.W(video_2_emb)
+
+        return video_1_emb, video_1_attn_weights, video_2_emb, video_2_attn_weights
+
+    def get_config(self):
+        layer_config = super().get_config()
+        layer_config["emb_dims"] = self.emb_dims
+        return layer_config
+
+
+def define_pair_video_encoder(pre_process_network: str, emb_size: int, cnn_trainable: bool=True, use_custom_cross_attn: bool = False, alpha: float = 0.0):
     if pre_process_network == ImageNetwork.INCEPTION_V3.value:
         frame_size = 299
     elif pre_process_network == ImageNetwork.RESNET_50.value:
@@ -114,6 +155,7 @@ def define_pair_video_encoder(pre_process_network: str, emb_size: int, cnn_train
     cnn_vid_encoder = CNNVideoEncoder(pre_process_network, cnn_trainable=cnn_trainable)
     # transformer_self_attn = TransformerSelfAttention(emb_size)
     transformer_cross_attn = TransformerCrossAttention(emb_size)
+    custom_cross_attn = CustomCrossAttention(emb_size, alpha=alpha)
 
     frames1 = tf.keras.Input(shape=(None, frame_size, frame_size, 3), ragged=True)
     frames2 = tf.keras.Input(shape=(None, frame_size, frame_size, 3), ragged=True)
@@ -121,8 +163,12 @@ def define_pair_video_encoder(pre_process_network: str, emb_size: int, cnn_train
     vid_enc2 = cnn_vid_encoder(frames2)
     # vid_self_attn_enc1 = transformer_self_attn(vid_enc1)
     # vid_self_attn_enc2 = transformer_self_attn(vid_enc2)
-    full_vid_enc2, full_vid_enc2_attn = transformer_cross_attn(vid_enc1, vid_enc2)
-    full_vid_enc1, full_vid_enc1_attn = transformer_cross_attn(vid_enc2, vid_enc1)
+    if use_custom_cross_attn:
+        full_vid_enc1, full_vid_enc1_attn, full_vid_enc2, full_vid_enc2_attn = custom_cross_attn(vid_enc1, vid_enc2)
+    else:
+        full_vid_enc2, full_vid_enc2_attn = transformer_cross_attn(vid_enc1, vid_enc2)
+        full_vid_enc1, full_vid_enc1_attn = transformer_cross_attn(vid_enc2, vid_enc1)
+
     full_vid_enc2_avg = global_avg_pooling(full_vid_enc2)
     full_vid_enc1_avg = global_avg_pooling(full_vid_enc1)
 
