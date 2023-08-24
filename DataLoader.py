@@ -25,11 +25,11 @@ class DataLoader:
     def create_annotation_df(self) -> pd.DataFrame:
         annotation_files = self.get_video_categories()
 
-        df = pd.read_csv(annotation_files[0])
+        df = pd.read_csv(annotation_files[0], header=None)
         df.columns = ["Video_A", "Video_B", "Copy_Start_Video_A", "Copy_End_Video_A", "Copy_Start_Video_B", "Copy_End_Video_B"]
 
         for file in annotation_files[1:]:
-            df_temp = pd.read_csv(file)
+            df_temp = pd.read_csv(file, header=None)
             df_temp.columns = ["Video_A", "Video_B", "Copy_Start_Video_A", "Copy_End_Video_A", "Copy_Start_Video_B",
                           "Copy_End_Video_B"]
             df = pd.concat([df, df_temp])
