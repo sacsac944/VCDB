@@ -136,6 +136,7 @@ class CustomCrossAttention(tf.keras.layers.Layer):
     def get_config(self):
         layer_config = super().get_config()
         layer_config["emb_dims"] = self.emb_dims
+        layer_config["alpha"] = self.alpha
         return layer_config
 
 
