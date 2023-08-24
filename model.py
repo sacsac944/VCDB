@@ -122,7 +122,7 @@ class CustomCrossAttention(tf.keras.layers.Layer):
         video_2_encoding_with_position_norm = tf.nn.l2_normalize(video_2_encoding_with_position, axis=-1)
 
         video_1_attn_weights = tf.matmul(video_1_encoding_with_position_norm, tf.transpose(video_2_encoding_with_position_norm, perm=(0, 2, 1)))
-        video_1_attn_weights = tf.clip_by_value(video_1_attn_weights, clip_value_min=self.alpha, clip_value_max=1.0)
+        video_1_attn_weights = tf.where(video_1_attn_weights > self.alpha, video_1_attn_weights, tf.zeros_like(video_1_attn_weights))
         video_2_attn_weights = tf.transpose(video_1_attn_weights, perm=(0, 2, 1))
 
         video_1_emb = tf.matmul(video_1_attn_weights, video_2_encoding_with_position)
