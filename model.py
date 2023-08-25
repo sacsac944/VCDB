@@ -191,6 +191,7 @@ class CustomSinePositionEncoding(tf.keras.layers.Layer):
         self.max_wavelength = max_wavelength
 
     def call(self, inputs: tf.Tensor):
+        inputs = tf.cast(inputs, tf.float32)
         shape = ops.shape(inputs)
         try:
             seq_length = shape[-2]
